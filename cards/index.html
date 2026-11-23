@@ -79,13 +79,14 @@ header h1 small{display:block;font-size:12px;font-weight:500;color:var(--gray)}
 .confirm.show{display:block}
 .confirm button{font:inherit;font-weight:800;border:none;border-radius:10px;padding:7px 16px;margin:6px 4px 0;cursor:pointer}
 .confirm .y{background:var(--rose);color:#fff}.confirm .n{background:#fff;color:var(--ink)}
+.proglink{display:flex;align-items:center;gap:10px;margin:-2px 0 12px;font-size:12px;color:#5d6b6a;line-height:1.5}.proglink button{flex:none;font:inherit;font-size:12.5px;font-weight:800;color:#0f5c5a;background:#e3f1ef;border:1px solid #cfe0dd;border-radius:99px;padding:6px 12px;cursor:pointer}
 </style>
 </head>
 <body>
 <div class="wrap">
  <header><h1>بطاقات الأسواق المالية<small>مقرر 5205 قصد · ذاكر بطاقة بطاقة</small></h1><button class="btn-menu" id="menuBtn">☰ القائمة</button></header>
  <div class="prog"><div class="row"><span>التقدم الكلي</span><span id="totTxt"></span></div><div class="bar"><i id="totBar"></i></div></div>
- <div class="levels" id="levels"></div>
+ <div class="levels" id="levels"></div><div class="proglink"><button id="progBtn" type="button">🔗 انسخ رابط تقدّمك</button><span>احفظه في المفضلة: يعيدك إلى موضعك وما أنجزته ولو مُسح حفظ المتصفح</span></div>
  <div id="stage"></div>
 </div>
 <div id="toast"></div>
@@ -219,7 +220,7 @@ const $=id=>document.getElementById(id);
 const L=n=>LEVELS[n-1];
 const doneIn=n=>L(n).cards.filter(c=>S.done[c.id]).length;
 const complete=n=>doneIn(n)===L(n).total;
-const unlocked=n=>n===1||complete(n-1);
+const unlocked=n=>true; // كل المستويات مفتوحة
 function order(n){let o=S.order[n];const ids=L(n).cards.map(c=>c.id);if(!o||o.length!==ids.length||!ids.every(i=>o.includes(i))){o=ids.slice();S.order[n]=o;}return o;}
 function nextId(n){return order(n).find(id=>!S.done[id]);}
 function card(id){for(const l of LEVELS){const c=l.cards.find(x=>x.id===id);if(c)return c;}}
@@ -265,7 +266,27 @@ $('menuBtn').onclick=openSheet;$('closeSheet').onclick=closeSheet;$('sheetBg').o
 $('resetBtn').onclick=()=>$('confirm').classList.add('show');$('no').onclick=()=>$('confirm').classList.remove('show');
 $('yes').onclick=()=>{const n=S.level;L(n).cards.forEach(c=>delete S.done[c.id]);delete S.order[n];S.cur[n]=null;
  hist=[];showFinish=false;save();closeSheet();toast('أُعيد تعيين المستوى');render();};
-if(!unlocked(S.level))S.level=1;
+
+/* ===== رابط التقدم: يُكتب التقدم والموضع في الرابط، فيعود الدارس إلى مكانه ولو مُسح حفظ المتصفح ===== */
+const PROG=(()=>{const A='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+ const lvOf=id=>+String(id).split('-')[0].slice(1);
+ function enc(){const ids=P.ids(),d=P.done();let s='';for(let i=0;i<ids.length;i+=6){let v=0;for(let j=0;j<6;j++)if(d[ids[i+j]])v|=1<<j;s+=A[v];}
+  const c=P.cur();return 'p='+s+'&l='+P.level()+(c?'&c='+c:'');}
+ function sync(){try{window.history.replaceState(null,'','#'+enc());}catch(e){}}
+ function load(){let start=null;try{const m={};(location.hash||'').replace(/^#/,'').split('&').forEach(kv=>{const i=kv.indexOf('=');if(i>0)m[kv.slice(0,i)]=kv.slice(i+1);});
+  if(!m.p)return null;const ids=P.ids(),d=P.done(),before=ids.filter(i=>d[i]).length;let fromLink=0;
+  for(let i=0;i<ids.length;i++){const v=A.indexOf(m.p[Math.floor(i/6)]||'A');if(v>=0&&(v>>(i%6))&1){fromLink++;d[ids[i]]=true;}}
+  if(fromLink>=before){if(m.c&&ids.includes(m.c)){P.go(lvOf(m.c),m.c);start=m.c;}else if(+m.l>=1&&+m.l<=4)P.go(+m.l,null);}
+  P.save();}catch(e){}return start;}
+ function copy(){const url=location.href.split('#')[0]+'#'+enc();const ok=()=>toast('نُسخ الرابط ✓ احفظه في المفضلة أو أرسله لنفسك');
+  const fb=()=>{const t=document.createElement('textarea');t.value=url;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();
+   let done=false;try{done=document.execCommand('copy');}catch(e){}t.remove();if(done)ok();else window.prompt('انسخ هذا الرابط واحفظه:',url);};
+  try{navigator.clipboard.writeText(url).then(ok,fb);}catch(e){fb();}}
+ return {sync,load,copy};})();
+const P={ids:()=>LEVELS.flatMap(l=>l.cards.map(c=>c.id)),done:()=>S.done,level:()=>S.level,cur:()=>showFinish?null:S.cur[S.level],go:(l,id)=>{S.level=l;S.cur[l]=id;showFinish=false;},save};
+{const _f=render;render=function(...a){const r=_f.apply(this,a);PROG.sync();return r;};}
+document.getElementById('progBtn').onclick=()=>PROG.copy();
+PROG.load();
 render();
 </script>
 </body>
